@@ -14,7 +14,7 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <WiFiUdp.h>
-#include <TimeLib.h> 
+#include <TimeLib.h>
 
 
 const char* ssid = "CE-ESL";
@@ -28,24 +28,37 @@ int timeh;
 int timem;
 int modes;
 int lights;
+int starth;
+int startm;
+int finishh;
+int finishm;
 int settimeh;
 int settimem;
+int flash = 0;
 
 //---------------------------------------------------------------------------------------------
 void blinkgreen () { digitalWrite(12, HIGH);digitalWrite(13, LOW);digitalWrite(14, LOW); }
 void blinkblue() { digitalWrite(12, LOW);digitalWrite(13, HIGH);digitalWrite(14, LOW); }
-void blinkwarnblue(int x) {
-  digitalWrite(12, LOW);digitalWrite(13, HIGH);digitalWrite(14, LOW); 
-  delay(x);
-  digitalWrite(12, HIGH);digitalWrite(13, LOW);digitalWrite(14, HIGH);
+void blinkwarnblue() {
+  flash++;
+  if(flash%2==0) {digitalWrite(12, LOW);digitalWrite(13, HIGH);digitalWrite(14, LOW);} 
+  if(flash%2==1) {digitalWrite(12, HIGH);digitalWrite(13, LOW);digitalWrite(14, HIGH);}
+  if(flash>1000) flash = 0;
   }
-void blinkwarnpink(int x) {
-  digitalWrite(12, LOW);digitalWrite(13, HIGH);digitalWrite(14, LOW); 
-  delay(x);
-  digitalWrite(12, HIGH);digitalWrite(13, LOW);digitalWrite(14, HIGH);
+void blinkwarnpink() {
+  flash++;
+  if(flash%2==0) {digitalWrite(12, LOW);digitalWrite(13, HIGH);digitalWrite(14, LOW);}
+  if(flash%2==1) {digitalWrite(12, HIGH);digitalWrite(13, LOW);digitalWrite(14, HIGH);}
+  if(flash>1000) flash = 0;
   }
 void blinkpink () { digitalWrite(12, LOW);digitalWrite(13, HIGH);digitalWrite(14, HIGH); }
 void blinkred () { digitalWrite(12, LOW);digitalWrite(13, LOW);digitalWrite(14, HIGH); }
+void blinkwarnred() {
+  flash++;
+  if(flash%2==0) digitalWrite(12, LOW);digitalWrite(13, LOW);digitalWrite(14, HIGH);
+  if(flash%2==1) digitalWrite(12, HIGH);digitalWrite(13, LOW);digitalWrite(14, HIGH);
+  if(flash>1000) flash = 0;
+  }
 
 //---------------------------------------------------------------------------------------------
 void gettime()
@@ -119,7 +132,7 @@ void gettime()
   time_t time = value_time;
   timeh = hour(time);
   timem = minute(time);
-  Serial.print("TIME GET : ");
+  Serial.print(" TIME GET : ");
   Serial.print(timeh);
   Serial.print(" ");
   Serial.println(timem);
@@ -203,6 +216,10 @@ void getdata(String data) {
   if(data = "LightSet") lights = value;
   if(data = "TimerH") settimeh = value;
   if(data = "TimerM") settimem = value;
+  if(data = "ScheduleH") starth = value;
+  if(data = "ScheduleM") startm = value;
+  if(data = "FinishH") finishh = value;
+  if(data = "FinishM") finishm = value;
   Serial.print(" Mode Get : "); 
   Serial.println(modes);
 }
@@ -305,13 +322,15 @@ void setup() {
   Serial.println("");
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  Serial.println(WiFi.localIP()); 
 
 
 }
+
+
 void loop() {
+  Serial.println("--------"); 
   getdata("ModeSet");
-  gettime();
   if(modes == 1) {
     getdata("NormalLight");
     if(lights == 1) blinkgreen();
@@ -321,7 +340,24 @@ void loop() {
     blinkpink();
     }
   if(modes == 3) {
-    blinkblue();
-    
+    getdata("ScheduleH");
+    getdata("ScheduleM");
+    getdata("FinishH");
+    getdata("FinishM");
+    while(modes == 3)
+    {
+    gettime();
+    if ( (((timeh*60)+timem) >= ((((starth*60)+startm)-10) && (((timeh*60)+timem) < (((starth*60)+startm)  ))) ))
+      {blinkwarnred();}
+      else if ( (((timeh*60)+timem) >= (((starth*60)+startm) && (((timeh*60)+timem) < (((finishh*60)+finishm)  ))) )) 
+      {blinkblue();}
+      else if ( (((timeh*60)+timem) >= ((((finishh*60)+finishm)-10) && (((timeh*60)+timem) < (((finishh*60)+finishm)  ))) )) 
+      {blinkwarnblue();}
+      else {blinkred();}
     }
-}
+
+     }
+    }
+
+
+   

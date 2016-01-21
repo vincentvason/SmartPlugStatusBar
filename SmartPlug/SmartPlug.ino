@@ -14,8 +14,7 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <WiFiUdp.h>
-#include <TimeLib.h>
-
+#include <TimeLib.h> 
 
 const char* ssid = "CE-ESL";
 const char* password = "ceeslonly";
@@ -24,40 +23,46 @@ const char* host = "api.anto.io";
 const char* host_time = "api.timezonedb.com";
 const int httpsPort = 80;
 
+int flash = 0;
 int timeh;
 int timem;
 int modes;
 int lights;
-int starth;
-int startm;
-int finishh;
-int finishm;
 int settimeh;
 int settimem;
-int flash = 0;
+int starth;
+int startm;
+int endh;
+int endm;
+int totalstart;
+int totalend;
+int totaltime;
+int pretimer;
+int prestart;
+int preend;
 
 //---------------------------------------------------------------------------------------------
 void blinkgreen () { digitalWrite(12, HIGH);digitalWrite(13, LOW);digitalWrite(14, LOW); }
 void blinkblue() { digitalWrite(12, LOW);digitalWrite(13, HIGH);digitalWrite(14, LOW); }
 void blinkwarnblue() {
   flash++;
-  if(flash%2==0) {digitalWrite(12, LOW);digitalWrite(13, HIGH);digitalWrite(14, LOW);} 
-  if(flash%2==1) {digitalWrite(12, HIGH);digitalWrite(13, LOW);digitalWrite(14, HIGH);}
-  if(flash>1000) flash = 0;
+  if (flash%2 == 1){digitalWrite(12, LOW);digitalWrite(13, HIGH);digitalWrite(14, LOW);} 
+  if (flash%2 == 0){digitalWrite(12, HIGH);digitalWrite(13, LOW);digitalWrite(14, HIGH);}
+  if (flash > 1000) flash = 0;
   }
 void blinkwarnpink() {
   flash++;
-  if(flash%2==0) {digitalWrite(12, LOW);digitalWrite(13, HIGH);digitalWrite(14, LOW);}
-  if(flash%2==1) {digitalWrite(12, HIGH);digitalWrite(13, LOW);digitalWrite(14, HIGH);}
-  if(flash>1000) flash = 0;
+  if (flash%2 == 1){digitalWrite(12, LOW);digitalWrite(13, HIGH);digitalWrite(14, HIGH);}
+  if (flash%2 == 0){digitalWrite(12, HIGH);digitalWrite(13, LOW);digitalWrite(14, HIGH);}
+  if (flash > 1000) flash = 0;
   }
 void blinkpink () { digitalWrite(12, LOW);digitalWrite(13, HIGH);digitalWrite(14, HIGH); }
 void blinkred () { digitalWrite(12, LOW);digitalWrite(13, LOW);digitalWrite(14, HIGH); }
 void blinkwarnred() {
   flash++;
-  if(flash%2==0) digitalWrite(12, LOW);digitalWrite(13, LOW);digitalWrite(14, HIGH);
-  if(flash%2==1) digitalWrite(12, HIGH);digitalWrite(13, LOW);digitalWrite(14, HIGH);
-  if(flash>1000) flash = 0;
+  if (flash%2 == 1){digitalWrite(12, LOW);digitalWrite(13, LOW);digitalWrite(14, HIGH);}
+  if (flash%2 == 0){digitalWrite(12, HIGH);digitalWrite(13, LOW);digitalWrite(14, HIGH);}
+  if (flash > 1000) flash = 0;
   }
 
 //---------------------------------------------------------------------------------------------
@@ -136,10 +141,13 @@ void gettime()
   Serial.print(timeh);
   Serial.print(" ");
   Serial.println(timem);
+
+  totaltime = timeh * 60;
+  totaltime += timem;
      
    }
 //-------------------------------------------------------------
-void getdata(String data) {
+int getdata(String data) {
   WiFiClient client;
   //Serial.print("connecting to ");
   Serial.print("GET MODE  ");
@@ -147,7 +155,7 @@ void getdata(String data) {
   Serial.print(" STATUS :  ");
   if (!client.connect(host, httpsPort)) {
     Serial.print("F");
-    return;
+    return 0;
   }
 
  
@@ -212,16 +220,9 @@ void getdata(String data) {
 
 
   }
-  if(data = "ModeSet") modes = value;
-  if(data = "LightSet") lights = value;
-  if(data = "TimerH") settimeh = value;
-  if(data = "TimerM") settimem = value;
-  if(data = "ScheduleH") starth = value;
-  if(data = "ScheduleM") startm = value;
-  if(data = "FinishH") finishh = value;
-  if(data = "FinishM") finishm = value;
   Serial.print(" Mode Get : "); 
-  Serial.println(modes);
+  Serial.println(value);
+  return value;
 }
 //----------------------------------------------------------------------------------------
 void setdata(String data, int valueset) {
@@ -302,6 +303,32 @@ void setdata(String data, int valueset) {
   Serial.print("Mode: "); 
   Serial.println(modes);
 }
+//------------------------------------------------------------------
+void scherange()
+{
+  if (modes == 2)
+  {
+    gettime();
+    starth = timeh;
+    startm = timem;
+    endh = timeh + settimeh;
+    endm = timem + settimem;
+  }
+  totalstart = starth*60;
+  totalstart += startm;
+  totalend = endh*60;
+  totalend += endm;
+  if (modes == 2 && totalend >= 1440)
+  {
+    totalend = totalend - 1440;
+  }
+
+  if(totalstart < 9) prestart = 1431+totalstart;
+  else prestart = totalstart-10;
+  if(totalend < 9) preend = 1431+totalend;
+  else preend = totalend-10;
+  
+}
 //--------------------------------------------------------------------
 void setup() {
   //D5 = 14 = RED
@@ -322,42 +349,87 @@ void setup() {
   Serial.println("");
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
-  Serial.println(WiFi.localIP()); 
+  Serial.println(WiFi.localIP());
 
 
 }
-
-
 void loop() {
-  Serial.println("--------"); 
-  getdata("ModeSet");
+  modes = getdata("ModeSet");
+  gettime();
   if(modes == 1) {
-    getdata("NormalLight");
+    lights = getdata("NormalLight");
     if(lights == 1) blinkgreen();
     if(lights == 0) blinkred();
     }
   if(modes == 2) {
-    blinkpink();
+    gettime();
+    settimeh = getdata("TimerH");
+    settimem = getdata("TimerM");
+    scherange();
+     while(modes == 2)
+    {
+      modes = getdata("ModeSet");
+      gettime();
+      if(totalstart <= totalend);
+      { 
+        if(totaltime <= totalend && totaltime > totalstart) {blinkpink(); Serial.print ("Light : On ");}
+        else if(totaltime <= totalend && totaltime > preend) {blinkwarnpink(); Serial.print ("Light : Pre-Off ");}
+        else {
+          blinkred(); Serial.print ("Light : Off ");
+          setdata("NormalLight",0);
+          setdata("ModeSet",1);
+        }
+      }
+      if(totalstart > totalend);
+      {  
+        if (totaltime >= totalstart && totaltime < 1440 && totaltime > 0 && totaltime <= preend) {blinkpink(); Serial.print ("Light : On ");}
+        else if (preend <= 1430 && totaltime <= totalend && totaltime > preend) {blinkwarnpink(); Serial.print ("Light : Pre-Off ");}
+        else if (prestart > 1430 && totaltime <= totalend && (totaltime > preend || totaltime < (preend-1431))) {blinkwarnpink(); Serial.print ("Light : Pre-Off ");}
+        else {blinkred(); Serial.print ("Light : Off ");
+        delay(100);
+        setdata("NormalLight",0);
+        setdata("ModeSet",1);}
+      }
+      Serial.print ("START : ");
+      Serial.print (totalstart);
+      Serial.print (" NOW : ");
+      Serial.print (totaltime);
+      Serial.print (" END : ");
+      Serial.println (totalend);
     }
+  }
   if(modes == 3) {
-    getdata("ScheduleH");
-    getdata("ScheduleM");
-    getdata("FinishH");
-    getdata("FinishM");
+    starth = getdata("ScheduleH");
+    startm = getdata("ScheduleM");
+    endh = getdata("FinishH");
+    endm = getdata("FinishM");
+    scherange();
     while(modes == 3)
     {
-    gettime();
-    if ( (((timeh*60)+timem) >= ((((starth*60)+startm)-10) && (((timeh*60)+timem) < (((starth*60)+startm)  ))) ))
-      {blinkwarnred();}
-      else if ( (((timeh*60)+timem) >= (((starth*60)+startm) && (((timeh*60)+timem) < (((finishh*60)+finishm)  ))) )) 
-      {blinkblue();}
-      else if ( (((timeh*60)+timem) >= ((((finishh*60)+finishm)-10) && (((timeh*60)+timem) < (((finishh*60)+finishm)  ))) )) 
-      {blinkwarnblue();}
-      else {blinkred();}
+      modes = getdata("ModeSet");
+      gettime();
+      if(totalstart <= totalend);
+      {  
+        if(totaltime <= totalstart && totaltime > prestart) {blinkwarnred(); Serial.print ("Light : Pre-On ");}
+        else if(totaltime <= preend && totaltime > totalstart) {blinkblue(); Serial.print ("Light : On ");}
+        else if(totaltime <= totalend && totaltime > preend) {blinkwarnblue(); Serial.print ("Light : Pre-Off ");}
+        else {blinkred(); Serial.print ("Light : Off ");}
+      }
+      if(totalstart > totalend);
+      {  
+        if(prestart <= 1430 && totaltime <= totalstart && totaltime > prestart) {blinkwarnred(); Serial.print ("Light : Pre-On ");}
+        else if (prestart > 1430 && totaltime <= totalstart && (totaltime > prestart || totaltime < (prestart-1431))) {blinkwarnred(); Serial.print ("Light : Pre-On ");}
+        else if (totaltime >= totalstart && totaltime < 1440 && totaltime > 0 && totaltime <= preend) {blinkblue(); Serial.print ("Light : On ");}
+        else if (preend <= 1430 && totaltime <= totalend && totaltime > preend) {blinkwarnblue(); Serial.print ("Light : Pre-Off ");}
+        else if (prestart > 1430 && totaltime <= totalend && (totaltime > preend || totaltime < (preend-1431))) {blinkwarnblue(); Serial.print ("Light : Pre-Off ");}
+        else {blinkred(); Serial.print ("Light : Off ");}
+      }
+      Serial.print ("START : ");
+      Serial.print (totalstart);
+      Serial.print (" NOW : ");
+      Serial.print (totaltime);
+      Serial.print (" END : ");
+      Serial.println (totalend);
     }
-
-     }
-    }
-
-
-   
+  }
+}
